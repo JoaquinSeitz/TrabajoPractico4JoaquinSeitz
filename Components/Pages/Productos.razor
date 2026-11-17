@@ -1,0 +1,99 @@
+﻿@page "/productos"
+@using System.Net.Http.Json
+@using TrabajoPractico4JoaquinSeitz.Models
+@inject HttpClient Http
+
+<h3>Gestión de Productos (FakeStore API)</h3>
+
+<div class="mb-3">
+    <button class="btn btn-primary me-2" @onclick="CrearProducto">Crear (POST)</button>
+    <button class="btn btn-warning me-2" @onclick="ActualizarProducto">Actualizar 21 (PUT)</button>
+    <button class="btn btn-danger" @onclick="EliminarProducto">Eliminar 21 (DELETE)</button>
+</div>
+
+@if (mensaje != null)
+{
+    <div class="alert alert-info">@mensaje</div>
+}
+
+@if (productos == null)
+{
+    <p><em>Cargando productos con GET...</em></p>
+}
+else
+{
+    <table class="table">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Título</th>
+                <th>Precio</th>
+                <th>Categoría</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var prod in productos)
+            {
+                <tr>
+                    <td>@prod.Id</td>
+                    <td>@prod.Title</td>
+                    <td>$@prod.Price</td>
+                    <td>@prod.Category</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private List<Producto>? productos;
+    private string? mensaje;
+
+    protected override async Task OnInitializedAsync()
+    {
+        productos = await Http.GetFromJsonAsync<List<Producto>>("products?limit=5");
+    }
+
+    private async Task CrearProducto()
+    {
+        var nuevoProducto = new Producto
+        {
+            Title = "Bikini de Carton Corrugado",
+            Price = 98.99m,
+            Description = "95%Cotton, 5%Spandex...",
+            Category = "women's clothing",
+            Image = "https://fakestoreapi.com/img/61pHAEJ4NML._AC_UX679_t.png"
+        };
+
+        var response = await Http.PostAsJsonAsync("products", nuevoProducto);
+        if (response.IsSuccessStatusCode)
+        {
+            mensaje = $"POST Exitoso: Código {response.StatusCode}";
+        }
+    }
+
+    private async Task ActualizarProducto()
+    {
+        var productoActualizado = new Producto
+        {
+            Title = "Bikini de Carton Corrugado Premium",
+            Price = 103m,
+            Category = "women's clothing"
+        };
+
+        var response = await Http.PutAsJsonAsync("products/21", productoActualizado);
+        if (response.IsSuccessStatusCode)
+        {
+            mensaje = $"PUT Exitoso: Producto 21 actualizado. Código {response.StatusCode}";
+        }
+    }
+
+    private async Task EliminarProducto()
+    {
+        var response = await Http.DeleteAsync("products/21");
+        if (response.IsSuccessStatusCode)
+        {
+            mensaje = $"DELETE Exitoso: Producto 21 eliminado. Código {response.StatusCode}";
+        }
+    }
+}
