@@ -3,97 +3,184 @@
 @using TrabajoPractico4JoaquinSeitz.Models
 @inject HttpClient Http
 
-<h3>Gestión de Productos (FakeStore API)</h3>
-
-<div class="mb-3">
-    <button class="btn btn-primary me-2" @onclick="CrearProducto">Crear (POST)</button>
-    <button class="btn btn-warning me-2" @onclick="ActualizarProducto">Actualizar 21 (PUT)</button>
-    <button class="btn btn-danger" @onclick="EliminarProducto">Eliminar 21 (DELETE)</button>
-</div>
+<h3>Gestión de Productos</h3>
 
 @if (mensaje != null)
 {
-    <div class="alert alert-info">@mensaje</div>
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+        @mensaje
+        <button type="button" class="btn-close" @onclick="() => mensaje = null"></button>
+    </div>
 }
+
+<div class="card mb-4 shadow-sm">
+    <div class="card-header bg-primary text-white">
+        <strong>@(modoEdicion ? "Editar Producto (PUT)" : "Nuevo Producto (POST)")</strong>
+    </div>
+    <div class="card-body">
+        <div class="row g-3">
+            <div class="col-md-4">
+                <label class="form-label">Título</label>
+                <input type="text" class="form-control" @bind="productoActual.Title" />
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Categoría</label>
+                <input type="text" class="form-control" @bind="productoActual.Category" />
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Precio</label>
+                <input type="number" step="0.01" class="form-control" @bind="productoActual.Price" />
+            </div>
+            <div class="col-md-3 d-flex align-items-end">
+                <button class="btn btn-success w-100" @onclick="GuardarProducto">
+                    @(modoEdicion ? "Actualizar" : "Guardar")
+                </button>
+                @if (modoEdicion)
+                {
+                    <button class="btn btn-secondary ms-2" @onclick="CancelarEdicion">Cancelar</button>
+                }
+            </div>
+        </div>
+    </div>
+</div>
 
 @if (productos == null)
 {
-    <p><em>Cargando productos con GET...</em></p>
+    <div class="d-flex align-items-center">
+        <div class="spinner-border text-primary me-2" role="status"></div>
+        <span>Cargando productos con GET...</span>
+    </div>
 }
 else
 {
-    <table class="table">
-        <thead>
-            <tr>
-                <th>ID</th>
-                <th>Título</th>
-                <th>Precio</th>
-                <th>Categoría</th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach (var prod in productos)
-            {
+    <div class="table-responsive">
+        <table class="table table-striped table-hover align-middle shadow-sm">
+            <thead class="table-dark">
                 <tr>
-                    <td>@prod.Id</td>
-                    <td>@prod.Title</td>
-                    <td>$@prod.Price</td>
-                    <td>@prod.Category</td>
+                    <th>ID</th>
+                    <th>Título</th>
+                    <th>Precio</th>
+                    <th>Categoría</th>
+                    <th>Acciones</th>
                 </tr>
-            }
-        </tbody>
-    </table>
+            </thead>
+            <tbody>
+                @foreach (var prod in productos)
+                {
+                    <tr>
+                        <td>@prod.Id</td>
+                        <td>@prod.Title</td>
+                        <td>$@prod.Price</td>
+                        <td>@prod.Category</td>
+                        <td>
+                            <button class="btn btn-sm btn-warning me-2" @onclick="() => PrepararEdicion(prod)">Editar</button>
+                            <button class="btn btn-sm btn-danger" @onclick="() => EliminarProducto(prod.Id)">Eliminar</button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
 }
 
 @code {
     private List<Producto>? productos;
     private string? mensaje;
 
+    // Variables para manejar el estado del formulario
+    private Producto productoActual = new Producto();
+    private bool modoEdicion = false;
+
+    // PUNTO 2: GET
     protected override async Task OnInitializedAsync()
     {
         productos = await Http.GetFromJsonAsync<List<Producto>>("products?limit=5");
     }
 
-    private async Task CrearProducto()
+    // PUNTO 2: POST y PUT combinados en el formulario
+    private async Task GuardarProducto()
     {
-        var nuevoProducto = new Producto
+        if (modoEdicion)
         {
-            Title = "Bikini de Carton Corrugado",
-            Price = 98.99m,
-            Description = "95%Cotton, 5%Spandex...",
-            Category = "women's clothing",
-            Image = "https://fakestoreapi.com/img/61pHAEJ4NML._AC_UX679_t.png"
-        };
+            // Petición PUT a la API
+            var response = await Http.PutAsJsonAsync($"products/{productoActual.Id}", productoActual);
 
-        var response = await Http.PostAsJsonAsync("products", nuevoProducto);
-        if (response.IsSuccessStatusCode)
+            if (response.IsSuccessStatusCode)
+            {
+                // Actualizamos la lista local para que la grilla cambie visualmente
+                var index = productos!.FindIndex(p => p.Id == productoActual.Id);
+                if (index != -1)
+                {
+                    productos[index] = new Producto
+                    {
+                        Id = productoActual.Id,
+                        Title = productoActual.Title,
+                        Price = productoActual.Price,
+                        Category = productoActual.Category
+                    };
+                }
+                mensaje = $"PUT Exitoso: Producto {productoActual.Id} actualizado (Status: {response.StatusCode})";
+                CancelarEdicion();
+            }
+        }
+        else
         {
-            mensaje = $"POST Exitoso: Código {response.StatusCode}";
+            // Petición POST a la API
+            var response = await Http.PostAsJsonAsync("products", productoActual);
+
+            if (response.IsSuccessStatusCode)
+            {
+                // FakeStore siempre devuelve ID 21 al crear. Para que la UI se vea bien, generamos un ID correlativo visual.
+                var nuevoId = productos!.Any() ? productos!.Max(p => p.Id) + 1 : 1;
+
+                productos!.Add(new Producto
+                {
+                    Id = nuevoId,
+                    Title = productoActual.Title,
+                    Price = productoActual.Price,
+                    Category = productoActual.Category
+                });
+
+                mensaje = $"POST Exitoso: Producto creado (Status: {response.StatusCode})";
+                CancelarEdicion();
+            }
         }
     }
 
-    private async Task ActualizarProducto()
+    private void PrepararEdicion(Producto prod)
     {
-        var productoActualizado = new Producto
+        // Clonamos el producto para no editar directamente la fila hasta que se guarde
+        productoActual = new Producto
         {
-            Title = "Bikini de Carton Corrugado Premium",
-            Price = 103m,
-            Category = "women's clothing"
+            Id = prod.Id,
+            Title = prod.Title,
+            Price = prod.Price,
+            Category = prod.Category
         };
-
-        var response = await Http.PutAsJsonAsync("products/21", productoActualizado);
-        if (response.IsSuccessStatusCode)
-        {
-            mensaje = $"PUT Exitoso: Producto 21 actualizado. Código {response.StatusCode}";
-        }
+        modoEdicion = true;
+        mensaje = null;
     }
 
-    private async Task EliminarProducto()
+    private void CancelarEdicion()
     {
-        var response = await Http.DeleteAsync("products/21");
+        productoActual = new Producto();
+        modoEdicion = false;
+    }
+
+    // PUNTO 2: DELETE
+    private async Task EliminarProducto(int id)
+    {
+        var response = await Http.DeleteAsync($"products/{id}");
+
         if (response.IsSuccessStatusCode)
         {
-            mensaje = $"DELETE Exitoso: Producto 21 eliminado. Código {response.StatusCode}";
+            // Removemos el producto de la lista local
+            var prod = productos!.FirstOrDefault(p => p.Id == id);
+            if (prod != null)
+            {
+                productos!.Remove(prod);
+            }
+            mensaje = $"DELETE Exitoso: Producto {id} eliminado (Status: {response.StatusCode})";
         }
     }
 }
